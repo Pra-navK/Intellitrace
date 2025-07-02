@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Python Execution Visualizer</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <style>
+    :root {
+      --background: #0f111a;
+      --panel: #1a1d29;
+      --highlight: #3a8cff;
+      --text: #e0e0e0;
+      --frame-bg: #11131d;
+      --frame-border: #333;
+      --btn-bg: #3a8cff;
+      --btn-hover: #1f6fe5;
+      --accent: #00c37a;
+      --scrollbar-bg: #2a2e3f;
+      --scrollbar-thumb: #3a8cff;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', sans-serif;
+      background: var(--background);
+      color: var(--text);
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: auto;
+      padding: 2rem;
+    }
+
+    h1 {
+      text-align: center;
+      color: var(--highlight);
+      margin-bottom: 2rem;
+    }
+
+    textarea {
+      width: 100%;
+      height: 300px;
+      background-color: var(--panel);
+      color: var(--text);
+      border: none;
+      padding: 1rem;
+      font-family: 'Fira Code', monospace;
+      font-size: 1rem;
+      border-radius: 6px;
+      resize: vertical;
+    }
+
+    button {
+      padding: 12px 24px;
+      border: none;
+      border-radius: 6px;
+      background-color: var(--btn-bg);
+      color: white;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+    }
+    button:hover {
+      background-color: var(--btn-hover);
+    }
+
+    .flex {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 2rem;
+    }
+
+    .panel {
+      flex: 1;
+      background-color: var(--panel);
+      border-radius: 12px;
+      padding: 1.5rem;
+      box-shadow: 0 0 8px rgba(0,0,0,0.4);
+    }
+
+    .stack-frame {
+      background: var(--frame-bg);
+      border: 1px solid var(--frame-border);
+      border-radius: 6px;
+      padding: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .stack-frame h3 {
+      margin: 0 0 0.5rem;
+      color: var(--highlight);
+    }
+
+    .variable {
+      display: flex;
+      justify-content: space-between;
+      padding: 4px 0;
+      font-family: 'Fira Code', monospace;
+    }
+
+    .highlight-line {
+      background: rgba(58, 140, 255, 0.15);
+      border-left: 4px solid var(--highlight);
+      padding-left: 0.5rem;
+    }
+
+    .controls {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 1rem;
+      margin: 1.5rem 0 1rem;
+      background: var(--panel);
+      padding: 1rem;
+      border-radius: 12px;
+    }
+
+    .output-note {
+      background: rgba(0, 255, 255, 0.08);
+      padding: 0.75rem;
+      border-left: 4px solid var(--highlight);
+      border-radius: 6px;
+      margin-top: 1rem;
+      font-style: italic;
+    }
+
+    pre {
+      overflow-x: auto;
+      background: #0d0d0d;
+      padding: 1rem;
+      border-radius: 8px;
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1>🐍 Python Execution Visualizer</h1>
+
+  <div id="codeInput">
+    <textarea id="codeEditor" placeholder="Write Python code here..."></textarea>
+    <div style="text-align:right; margin-top:1rem">
+      <button onclick="submitCode()">🚀 Submit Code</button>
+    </div>
+  </div>
+
+  <div id="visualizer" style="display:none">
+    <div class="controls">
+      <button onclick="prevStep()">⏮ Prev</button>
+      <button onclick="nextStep()">Next ⏭</button>
+      <input type="range" id="stepSlider" min="0" value="0">
+      <span id="stepLabel">Step 0/0</span>
+      <button onclick="editCode()" style="margin-left:auto; background-color: var(--accent)">✏️ Edit Code</button>
+    </div>
+
+    <div class="flex">
+      <div class="panel">
+        <h2>Code</h2>
+        <pre id="codeDisplay"></pre>
+        <div id="output" class="output-note"></div>
+      </div>
+      <div class="panel">
+        <h2>Stack Frames</h2>
+        <div id="framesContainer"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  let trace = [];
+  let step = 0;
+  let code = '';
+
+  function submitCode() {
+    code = document.getElementById('codeEditor').value;
+    fetch('/api/trace/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code })
+    })
+    .then(res => res.json())
+    .then(data => {
+      trace = data;
+      step = 0;
+      document.getElementById('codeInput').style.display = 'none';
+      document.getElementById('visualizer').style.display = 'block';
+      document.getElementById('stepSlider').max = trace.length - 1;
+      renderStep();
+    });
+  }
+
+  function renderStep() {
+    const s = trace[step];
+    document.getElementById('stepLabel').innerText = `Step ${step + 1}/${trace.length}`;
+    document.getElementById('stepSlider').value = step;
+
+    const codeLines = code.split('\n');
+    document.getElementById('codeDisplay').innerHTML = '';
+    codeLines.forEach((line, i) => {
+      const div = document.createElement('div');
+      div.textContent = line;
+      if (i + 1 === s.line) div.classList.add('highlight-line');
+      document.getElementById('codeDisplay').appendChild(div);
+    });
+
+    const allFrames = [...(s.stack || [])];
+    if (s.variables && s.variables.global) {
+      allFrames.unshift({ function: 'global', locals: s.variables.global });
+    }
+
+    renderFrames(allFrames);
+    document.getElementById('output').textContent = s.note || s.code || '';
+  }
+
+  function renderFrames(frames) {
+    const container = document.getElementById('framesContainer');
+    container.innerHTML = '';
+    frames.forEach(frame => {
+      container.appendChild(createFrame(frame.function, frame.locals));
+    });
+  }
+
+  function createFrame(name, vars) {
+    const frame = document.createElement('div');
+    frame.className = 'stack-frame';
+    const header = document.createElement('h3');
+    header.textContent = name;
+    frame.appendChild(header);
+    for (let key in vars) {
+      const row = document.createElement('div');
+      row.className = 'variable';
+      row.innerHTML = `<span>${key}</span><span>${JSON.stringify(vars[key])}</span>`;
+      frame.appendChild(row);
+    }
+    return frame;
+  }
+
+  function nextStep() {
+    if (step < trace.length - 1) {
+      step++;
+      renderStep();
+    }
+  }
+
+  function prevStep() {
+    if (step > 0) {
+      step--;
+      renderStep();
+    }
+  }
+
+  function editCode() {
+    document.getElementById('visualizer').style.display = 'none';
+    document.getElementById('codeInput').style.display = 'block';
+  }
+
+  document.getElementById('stepSlider').addEventListener('input', (e) => {
+    step = parseInt(e.target.value);
+    renderStep();
+  });
+</script>
+</body>
+</html>
