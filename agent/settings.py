@@ -23,9 +23,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-$z4@y$0tg)1@3od_0=s6$m+=ka8x%r)-app^gmf&uxsb)nnjb$'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = False
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['intellitrace1.onrender.com']
 
 
 # Application definition
