@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional
 from dataclasses import dataclass, asdict
 from enum import Enum
 import builtins
+import random
 
 # Universal event types to cover all basic Python logic
 class EventType(Enum):
@@ -31,6 +32,7 @@ class EventType(Enum):
     SUBTRACTION = "SUBTRACTION"
     DIVISION = "DIVISION"
     COMPARISON = "COMPARISON"
+    INPUT = "INPUT"  # Added event type for user input
 
 @dataclass
 class TraceEvent:
@@ -92,7 +94,7 @@ class EnhancedUniversalTracer:
         global_vars = {
             k: self._serialize_value(v)
             for k, v in module_frame.locals.items() 
-            if not k.startswith('__') and k not in ['print', 'builtins'] and not callable(v)
+            if not k.startswith('__') and k not in ['print', 'input', 'builtins'] and not callable(v)
         }
 
         current_frame = self.call_stack[-1]
@@ -148,8 +150,11 @@ class EnhancedUniversalTracer:
         right_val = self._get_value_from_node(node.comparators[0], frame)
 
         if left_val is not None and right_val is not None:
-            result = eval(f"a {op_str} b", {"a": left_val, "b": right_val})
-            return EventType.COMPARISON, f"Comparing {self._serialize_value(left_val)} {op_str} {self._serialize_value(right_val)} → {result}"
+            try:
+                result = eval(f"a {op_str} b", {"a": left_val, "b": right_val})
+                return EventType.COMPARISON, f"Comparing {self._serialize_value(left_val)} {op_str} {self._serialize_value(right_val)} → {result}"
+            except:
+                pass
         return EventType.COMPARISON, "Evaluating comparison"
 
     def _analyze_math_operation(self, node, frame):
@@ -185,8 +190,17 @@ class EnhancedUniversalTracer:
         def traced_print(*args, **kwargs):
             self.current_print_output = ' '.join(str(arg) for arg in args)
             return builtins.print(*args, **kwargs)
+        
+        # This mock input function will be used instead of the real one.
+        # It fulfills the request to use a random number from 1 to 8.
+        def mock_input(prompt=""):
+            return str(random.randint(1, 8))
 
-        exec_namespace = {'print': traced_print, '__builtins__': builtins}
+        exec_namespace = {
+            'print': traced_print,
+            'input': mock_input,  # Inject the mock input function
+            '__builtins__': builtins
+        }
 
         try:
             sys.settrace(self._trace_function)
@@ -241,12 +255,28 @@ class EnhancedUniversalTracer:
 
             try:
                 node = ast.parse(code_line.strip()).body[0]
-                if isinstance(node, (ast.If, ast.For, ast.While)):
-                    if isinstance(node, (ast.If)):
-                        event_type, note = self._analyze_comparison(node.test, frame)
-                    else: # For, While
-                        self.loop_iterations[line_no] = self.loop_iterations.get(line_no, 0) + 1
-                        event_type, note = EventType.LOOP, f"Loop iteration {self.loop_iterations[line_no]}"
+                call_node = None
+                if isinstance(node, ast.Assign): call_node = node.value
+                elif isinstance(node, ast.Expr): call_node = node.value
+
+                # --- High-priority check for special function calls ---
+                if isinstance(call_node, ast.Call):
+                    func_name = self._extract_function_name(call_node)
+                    if func_name == 'input':
+                        event_type = EventType.INPUT
+                        prompt = self._get_value_from_node(call_node.args[0], frame) if call_node.args else ""
+                        note = f"Reading input from user with prompt: '{prompt}'. Simulated with a random number."
+                    elif func_name == 'print':
+                        event_type, output = EventType.PRINT, self.current_print_output
+                        note = f"Printing: {output}"
+                        self.current_print_output = None # Consume the output
+
+                # --- If not a special call, check for other statement types ---
+                elif isinstance(node, (ast.If)):
+                    event_type, note = self._analyze_comparison(node.test, frame)
+                elif isinstance(node, (ast.For, ast.While)):
+                    self.loop_iterations[line_no] = self.loop_iterations.get(line_no, 0) + 1
+                    event_type, note = EventType.LOOP, f"Loop iteration {self.loop_iterations[line_no]}"
                 elif isinstance(node, ast.Assign):
                     target_str = ', '.join(t.id for t in node.targets if isinstance(t, ast.Name))
                     event_type, note = self._analyze_math_operation(node.value, frame) if isinstance(node.value, ast.BinOp) else (EventType.ASSIGN, f"Assigning to '{target_str}'")
@@ -255,13 +285,9 @@ class EnhancedUniversalTracer:
                     event_type, note = EventType.ASSIGN, f"Updating '{target_str}'"
                 elif isinstance(node, ast.Return):
                      event_type, note = self._analyze_math_operation(node.value, frame) if isinstance(node.value, ast.BinOp) else (EventType.RETURN, "Returning from function")
-                elif isinstance(node, ast.Expr):
+                elif isinstance(node, ast.Expr): # Fallback for other expressions
                     value_node = node.value
-                    if isinstance(value_node, ast.Call) and self._extract_function_name(value_node) == 'print':
-                        event_type, output = EventType.PRINT, self.current_print_output
-                        note = f"Printing: {output}"
-                        self.current_print_output = None # Consume the output
-                    elif isinstance(value_node, ast.BinOp):
+                    if isinstance(value_node, ast.BinOp):
                         event_type, note = self._analyze_math_operation(value_node, frame)
                     elif isinstance(value_node, ast.Compare):
                         event_type, note = self._analyze_comparison(value_node, frame)
@@ -299,25 +325,17 @@ def trace_python_code(code_string: str, output_format="json") -> str:
 
 # Test with a comprehensive example
 if __name__ == "__main__":
-    test_code_mixed = """
-def check_value(val):
-    print(f"Checking {val}")
-    if val > 100:
-        res = val - 100
-        print("Over 100")
-        return res
-    elif val == 100:
-        return 0
-    else:
-        res = 100 - val
-        return res
-
-x = 50
-y = 105
-z = check_value(x + y)
-print(f"Final result is {z}")
+    test_code_input = """
+name = input("Enter your name: ")
+print(f"Hello, {name}")
+age_str = input("Enter your age: ")
+age = int(age_str)
+if age < 18:
+    print("You are a minor.")
+else:
+    print("You are an adult.")
 """
     
-    print("\n=== COMPREHENSIVE EXAMPLE ===")
-    trace_output = trace_python_code(test_code_mixed)
+    print("\n=== NEW EXAMPLE WITH USER INPUT ===")
+    trace_output = trace_python_code(test_code_input)
     print(trace_output)
