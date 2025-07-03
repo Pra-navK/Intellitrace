@@ -21,374 +21,136 @@
       --accent: #00c37a;
       --accent-bg: linear-gradient(135deg, #00c37a 0%, #00a866 100%);
       --error: #ff4757;
-      --warning: #ffa502;
-      --success: #2ed573;
+      --slider-track-bg: rgba(255, 255, 255, 0.1);
     }
 
-    * {
-      box-sizing: border-box;
-    }
+    * { box-sizing: border-box; }
+    html { height: 100%; }
+    body { margin: 0; font-family: 'Inter', sans-serif; background: var(--background); color: var(--text); height: 100vh; font-size: 16px; display: flex; flex-direction: column; overflow: hidden; }
+    .container { max-width: 1600px; margin: auto; padding: 1rem; width: 100%; flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+    h1 { text-align: center; background: linear-gradient(135deg, var(--highlight) 0%, var(--accent) 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; font-size: clamp(1.8rem, 4vw, 2.5rem); font-weight: 700; margin-bottom: 2rem; text-shadow: 0 0 30px rgba(58, 140, 255, 0.3); flex-shrink: 0; }
+    textarea { width: 100%; height: clamp(250px, 40vh, 400px); background: var(--panel); color: var(--text); border: 2px solid var(--panel-border); padding: 1rem; font-family: 'JetBrains Mono', monospace; font-size: clamp(0.8rem, 1vw, 1rem); border-radius: 12px; resize: vertical; backdrop-filter: blur(10px); }
+    textarea:focus { outline: none; border-color: var(--highlight); box-shadow: 0 0 20px rgba(58, 140, 255, 0.2); }
+    button { padding: clamp(10px, 1.5vw, 14px) clamp(16px, 2.5vw, 28px); border: none; border-radius: 8px; background: var(--btn-bg); color: white; font-weight: 600; font-size: clamp(0.8rem, 1.5vw, 0.95rem); cursor: pointer; transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(58, 140, 255, 0.3); min-height: 44px; display: flex; align-items: center; justify-content: center; gap: 0.5rem; }
+    button:hover:not(:disabled) { background: var(--btn-hover); transform: translateY(-2px); box-shadow: 0 6px 20px rgba(58, 140, 255, 0.4); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+    button.accent { background: var(--accent-bg); box-shadow: 0 4px 15px rgba(0, 195, 122, 0.3); }
+    button.accent:hover:not(:disabled) { box-shadow: 0 6px 20px rgba(0, 195, 122, 0.4); }
 
-    body {
-      margin: 0;
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      background: var(--background);
-      color: var(--text);
-      min-height: 100vh;
-    }
+    /* --- Layout --- */
+    #visualizer { flex: 1; display: flex; overflow: hidden; }
+    .main-layout { display: flex; gap: 1rem; width: 100%; height: 100%; }
+    .left-column, .right-column { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1rem; }
+    .panel { background: var(--panel); border: 1px solid var(--panel-border); border-radius: 16px; padding: 1rem; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3); backdrop-filter: blur(10px); position: relative; overflow: hidden; display: flex; flex-direction: column; }
+    .left-column > .panel { flex: 1; min-height: 0; }
+    .right-column > .panel { flex: 1; }
+    .panel::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: linear-gradient(90deg, transparent, var(--highlight), transparent); }
+    .panel h2 { margin: 0 0 1rem; color: var(--highlight); font-size: clamp(1rem, 2vw, 1.25rem); font-weight: 600; display: flex; align-items: center; gap: 0.5rem; flex-shrink: 0; }
 
-    .container {
-      max-width: 1600px;
-      margin: auto;
-      padding: 2rem;
-    }
+    /* --- Right Column (Stack Frames) Scrolling --- */
+    #framesContainer { flex: 1; overflow-y: auto; padding-right: 0.5rem; }
+    .stack-frame { background: var(--frame-bg); border: 1px solid var(--frame-border); border-radius: 12px; padding: 1rem; margin-bottom: 1rem; transition: all 0.3s ease; backdrop-filter: blur(5px); }
+    .stack-frame:last-child { margin-bottom: 0; }
+    .stack-frame:hover { border-color: var(--highlight); box-shadow: 0 4px 20px rgba(58, 140, 255, 0.15); }
+    .stack-frame h3 { margin: 0 0 0.75rem; color: var(--highlight); font-size: clamp(0.9rem, 2vw, 1.1rem); font-weight: 600; word-break: break-word; }
+    .stack-frame h3::before { content: '📦'; margin-right: 0.5rem; }
+    .variable { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; margin: 4px 0; font-family: 'JetBrains Mono', monospace; font-size: clamp(0.75rem, 1.5vw, 0.9rem); background: rgba(255, 255, 255, 0.02); border-radius: 6px; border-left: 3px solid var(--accent); }
+    .variable-name { font-weight: 500; word-break: break-word; }
+    .variable-value { color: var(--text-secondary); font-style: italic; word-break: break-all; text-align: right; }
 
-    h1 {
-      text-align: center;
-      background: linear-gradient(135deg, var(--highlight) 0%, var(--accent) 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-      font-size: 2.5rem;
-      font-weight: 700;
-      margin-bottom: 2rem;
-      text-shadow: 0 0 30px rgba(58, 140, 255, 0.3);
-    }
-
-    textarea {
-      width: 100%;
-      height: 350px;
-      background: var(--panel);
-      color: var(--text);
-      border: 2px solid var(--panel-border);
-      padding: 1.5rem;
-      font-family: 'JetBrains Mono', 'Fira Code', monospace;
-      font-size: 1rem;
-      line-height: 1.6;
-      border-radius: 12px;
-      resize: vertical;
-      transition: border-color 0.3s ease, box-shadow 0.3s ease;
-      backdrop-filter: blur(10px);
-    }
-
-    textarea:focus {
-      outline: none;
-      border-color: var(--highlight);
-      box-shadow: 0 0 20px rgba(58, 140, 255, 0.2);
-    }
-
-    button {
-      padding: 14px 28px;
-      border: none;
-      border-radius: 8px;
-      background: var(--btn-bg);
-      color: white;
-      font-weight: 600;
-      font-size: 0.95rem;
-      cursor: pointer;
-      transition: all 0.3s ease;
-      box-shadow: 0 4px 15px rgba(58, 140, 255, 0.3);
-      position: relative;
-      overflow: hidden;
-    }
-
-    button:hover {
-      background: var(--btn-hover);
-      transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(58, 140, 255, 0.4);
-    }
-
-    button:active {
-      transform: translateY(0);
-    }
-
-    button.accent {
-      background: var(--accent-bg);
-      box-shadow: 0 4px 15px rgba(0, 195, 122, 0.3);
-    }
-
-    button.accent:hover {
-      box-shadow: 0 6px 20px rgba(0, 195, 122, 0.4);
-    }
-
-    .flex {
-      display: flex;
-      gap: 2rem;
-      flex-wrap: wrap;
-    }
-
-    .panel {
-      flex: 1;
-      min-width: 300px;
-      background: var(--panel);
-      border: 1px solid var(--panel-border);
-      border-radius: 16px;
-      padding: 2rem;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-      backdrop-filter: blur(10px);
-      position: relative;
-      overflow: hidden;
-    }
-
-    .panel::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 1px;
-      background: linear-gradient(90deg, transparent, var(--highlight), transparent);
-    }
-
-    .panel h2 {
-      margin: 0 0 1.5rem;
-      color: var(--highlight);
-      font-size: 1.25rem;
-      font-weight: 600;
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-    }
-
-    .stack-frame {
-      background: var(--frame-bg);
-      border: 1px solid var(--frame-border);
-      border-radius: 12px;
-      padding: 1.5rem;
-      margin-bottom: 1rem;
-      transition: all 0.3s ease;
-      backdrop-filter: blur(5px);
-    }
-
-    .stack-frame:hover {
-      border-color: var(--highlight);
-      box-shadow: 0 4px 20px rgba(58, 140, 255, 0.15);
-    }
-
-    .stack-frame h3 {
-      margin: 0 0 1rem;
-      color: var(--highlight);
-      font-size: 1.1rem;
-      font-weight: 600;
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-    }
-
-    .stack-frame h3::before {
-      content: '📦';
-      font-size: 0.9rem;
-    }
-
-    .variable {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 8px 12px;
-      margin: 4px 0;
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 0.9rem;
-      background: rgba(255, 255, 255, 0.02);
-      border-radius: 6px;
-      border-left: 3px solid var(--accent);
-      transition: background 0.2s ease;
-    }
-
-    .variable:hover {
-      background: rgba(255, 255, 255, 0.05);
-    }
-
-    .variable-name {
-      color: var(--text);
-      font-weight: 500;
-    }
-
-    .variable-value {
-      color: var(--text-secondary);
-      font-style: italic;
-    }
-
-    .highlight-line {
-      background: linear-gradient(90deg, rgba(58, 140, 255, 0.15), rgba(58, 140, 255, 0.05));
-      border-left: 4px solid var(--highlight);
-      padding-left: 1rem;
-      margin-left: -1rem;
-      animation: pulse 2s infinite;
-    }
-
+    /* --- Left Column (Code) Scrolling & Highlight --- */
+    pre#codeDisplay { flex: 1; overflow: auto; background: rgba(0, 0, 0, 0.4); padding: 1rem; border-radius: 12px; border: 1px solid rgba(58, 140, 255, 0.1); font-family: 'JetBrains Mono', monospace; line-height: 1.6; }
+    .code-line { transition: all 0.3s ease; }
+    .highlight-line { background: linear-gradient(90deg, rgba(58, 140, 255, 0.15), rgba(58, 140, 255, 0.05)); border-left: 4px solid var(--highlight); animation: pulse 2s infinite; }
     @keyframes pulse {
-      0%, 100% { background: linear-gradient(90deg, rgba(58, 140, 255, 0.15), rgba(58, 140, 255, 0.05)); }
       50% { background: linear-gradient(90deg, rgba(58, 140, 255, 0.25), rgba(58, 140, 255, 0.1)); }
     }
+    .output-section { background: rgba(0, 255, 255, 0.05); border: 1px solid rgba(0, 255, 255, 0.2); padding: 1rem; border-radius: 8px; margin-top: 1rem; flex-shrink: 0; }
+    .output-section h4 { margin: 0 0 0.5rem; color: var(--accent); }
 
-    .controls {
-      display: flex;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: 1rem;
-      margin: 2rem 0;
-      background: var(--panel);
-      border: 1px solid var(--panel-border);
-      padding: 1.5rem;
-      border-radius: 16px;
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
-      backdrop-filter: blur(10px);
-    }
+    /* --- Controls & Attractive Slider --- */
+    .controls { display: flex; align-items: center; flex-wrap: wrap; gap: 1rem; flex-shrink: 0; background: var(--panel); border: 1px solid var(--panel-border); padding: 1rem; border-radius: 16px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2); backdrop-filter: blur(10px); }
+    .controls-nav { display: flex; gap: 0.5rem; }
+    .step-info { display: flex; align-items: center; gap: 1rem; margin-left: auto; }
+    .slider-container { display: flex; align-items: center; gap: 0.5rem; flex: 1; }
+    
+    #stepSlider { -webkit-appearance: none; appearance: none; width: 100%; height: 8px; background: var(--slider-track-bg); border-radius: 4px; outline: none; transition: opacity .2s; }
+    #stepSlider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 22px; height: 22px; background: #fff; border: 3px solid var(--highlight); border-radius: 50%; cursor: pointer; box-shadow: 0 0 10px rgba(58, 140, 255, 0.5); transition: all 0.2s ease-in-out; }
+    #stepSlider::-webkit-slider-thumb:hover { transform: scale(1.1); box-shadow: 0 0 20px rgba(58, 140, 255, 0.8); }
+    #stepSlider::-moz-range-thumb { width: 22px; height: 22px; background: #fff; border: 3px solid var(--highlight); border-radius: 50%; cursor: pointer; box-shadow: 0 0 10px rgba(58, 140, 255, 0.5); transition: all 0.2s ease-in-out; }
+    #stepSlider::-moz-range-thumb:hover { transform: scale(1.1); box-shadow: 0 0 20px rgba(58, 140, 255, 0.8); }
 
-    .step-info {
-      display: flex;
-      align-items: center;
-      gap: 1rem;
-      margin-left: auto;
-    }
+    .loading, .error-message { padding: 1rem; margin-top: 1rem; border-radius: 8px; }
+    .loading { display: flex; align-items: center; justify-content: center; }
+    .loading::after { content: ''; width: 20px; height: 20px; border: 2px solid var(--highlight); border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite; margin-left: 0.5rem; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .error-message { background: rgba(255, 71, 87, 0.1); border: 1px solid var(--error); color: var(--error); }
 
-    #stepSlider {
-      -webkit-appearance: none;
-      appearance: none;
-      height: 6px;
-      background: rgba(255, 255, 255, 0.1);
-      border-radius: 3px;
-      outline: none;
-      min-width: 200px;
-    }
-
-    #stepSlider::-webkit-slider-thumb {
-      -webkit-appearance: none;
-      appearance: none;
-      width: 20px;
-      height: 20px;
-      background: var(--highlight);
-      border-radius: 50%;
-      cursor: pointer;
-      box-shadow: 0 2px 10px rgba(58, 140, 255, 0.5);
-    }
-
-    #stepSlider::-moz-range-thumb {
-      width: 20px;
-      height: 20px;
-      background: var(--highlight);
-      border-radius: 50%;
-      cursor: pointer;
-      border: none;
-      box-shadow: 0 2px 10px rgba(58, 140, 255, 0.5);
-    }
-
-    .output-section {
-      background: rgba(0, 255, 255, 0.05);
-      border: 1px solid rgba(0, 255, 255, 0.2);
-      padding: 1rem;
-      border-radius: 8px;
-      margin-top: 1.5rem;
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 0.9rem;
-    }
-
-    .output-section h4 {
-      margin: 0 0 0.5rem;
-      color: var(--accent);
-      font-size: 0.9rem;
-      font-weight: 600;
-    }
-
-    pre {
-      overflow-x: auto;
-      background: rgba(0, 0, 0, 0.4);
-      padding: 1.5rem;
-      border-radius: 12px;
-      margin: 0;
-      border: 1px solid rgba(58, 140, 255, 0.1);
-      font-family: 'JetBrains Mono', monospace;
-      line-height: 1.6;
-    }
-
-    .code-line {
-      padding: 2px 0;
-      border-radius: 4px;
-      transition: all 0.3s ease;
-    }
-
-    .loading {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 2rem;
-      color: var(--text-secondary);
-    }
-
-    .loading::after {
-      content: '';
-      width: 20px;
-      height: 20px;
-      border: 2px solid var(--highlight);
-      border-top: 2px solid transparent;
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
-      margin-left: 0.5rem;
-    }
-
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
-
-    .error-message {
-      background: rgba(255, 71, 87, 0.1);
-      border: 1px solid var(--error);
-      color: var(--error);
-      padding: 1rem;
-      border-radius: 8px;
-      margin-top: 1rem;
-    }
-
+    /* Responsive styles */
     @media (max-width: 768px) {
-      .container { padding: 1rem; }
-      .flex { flex-direction: column; }
-      .controls { flex-direction: column; align-items: stretch; }
-      .step-info { margin-left: 0; justify-content: center; }
-      #stepSlider { min-width: 100%; }
+      html, body { height: auto; overflow-y: auto; }
+      .container { padding: 0.5rem; flex: 1 1 auto; overflow: visible; height: auto; }
+      #visualizer, .main-layout { flex-direction: column; height: auto; overflow: visible; }
+      .panel, #framesContainer, pre#codeDisplay { overflow: visible; flex: none; padding-right: 0; }
+      .controls { flex-direction: column; align-items: stretch; gap: 0.75rem; }
+      .step-info { margin-left: 0; justify-content: center; flex-direction: column; }
+      .slider-container { order: -1; }
+      .variable { flex-direction: column; align-items: flex-start; gap: 0.25rem; }
+      .variable-value { text-align: left; }
     }
   </style>
 </head>
 <body>
 <div class="container">
   <h1>🐍 Python Execution Visualizer</h1>
-
   <div id="codeInput">
-    <textarea id="codeEditor" placeholder="# Write your Python code here...&#10;# The visualizer will show step-by-step execution&#10;&#10;def factorial(n):&#10;    if n <= 1:&#10;        return 1&#10;    return n * factorial(n - 1)&#10;&#10;result = factorial(5)&#10;print(f'Factorial of 5 is {result}')"></textarea>
+    <textarea id="codeEditor" placeholder="# Write your Python code here...
+# The visualizer will show step-by-step execution
+
+def factorial(n):
+    if n <= 1:
+        return 1
+    return n * factorial(n - 1)
+
+def main():
+    for i in range(1, 6):
+        res = factorial(i)
+        print(f'Factorial of {i} is {res}')
+
+main()
+print('Done.')"></textarea>
     <div style="text-align:right; margin-top:1rem">
       <button onclick="submitCode()">🚀 Start Visualization</button>
     </div>
   </div>
-
   <div id="visualizer" style="display:none">
-    <div class="controls">
-      <button onclick="prevStep()" id="prevBtn">⏮️ Previous</button>
-      <button onclick="nextStep()" id="nextBtn">Next ⏭️</button>
-      <input type="range" id="stepSlider" min="0" value="0">
-      <div class="step-info">
-        <span id="stepLabel">Step 0/0</span>
-        <button onclick="editCode()" class="accent">✏️ Edit Code</button>
-      </div>
-    </div>
-
-    <div class="flex">
-      <div class="panel">
-        <h2>💻 Code Execution</h2>
-        <pre id="codeDisplay"></pre>
-        <div id="outputSection" class="output-section" style="display:none">
-          <h4>📋 Step Information</h4>
-          <div id="output"></div>
+    <div class="main-layout">
+      <!-- Left Column: Code and Controls -->
+      <div class="left-column">
+        <div class="panel">
+          <h2>💻 Code Execution</h2>
+          <pre id="codeDisplay"></pre>
+          <div id="outputSection" class="output-section" style="display:none">
+            <h4>📋 Step Information</h4>
+            <div id="output"></div>
+          </div>
+        </div>
+        <div class="controls">
+          <div class="controls-nav"><button onclick="prevStep()" id="prevBtn">⏮️ Previous</button><button onclick="nextStep()" id="nextBtn">Next ⏭️</button></div>
+          <div class="slider-container"><input type="range" id="stepSlider" min="0" value="0"></div>
+          <div class="step-info"><span id="stepLabel">Step 0/0</span><button onclick="editCode()" class="accent">✏️ Edit Code</button></div>
         </div>
       </div>
-      <div class="panel">
-        <h2>🔍 Stack Frames & Variables</h2>
-        <div id="framesContainer">
-          <div class="loading">Loading execution trace...</div>
+      <!-- Right Column: Stack Frames (Scrollable) -->
+      <div class="right-column">
+        <div class="panel">
+          <h2>🔍 Stack Frames & Variables</h2>
+          <div id="framesContainer"><div class="loading">Loading execution trace...</div></div>
         </div>
       </div>
     </div>
   </div>
 </div>
-
 <script>
   let trace = [];
   let step = 0;
@@ -396,256 +158,158 @@
 
   function submitCode() {
     code = document.getElementById('codeEditor').value.trim();
-    
-    if (!code) {
-      alert('Please enter some Python code to visualize!');
-      return;
-    }
-
-    // Show loading state
+    if (!code) { alert('Please enter some Python code to visualize!'); return; }
     document.getElementById('codeInput').style.display = 'none';
-    document.getElementById('visualizer').style.display = 'block';
+    document.getElementById('visualizer').style.display = 'flex';
     document.getElementById('framesContainer').innerHTML = '<div class="loading">Generating execution trace...</div>';
 
-    // Make API call to backend
-    fetch('/api/trace/', {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
-      body: JSON.stringify({ code })
-    })
-    .then(response => {
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-      return response.json();
-    })
+    fetch('/api/trace/', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }, body: JSON.stringify({ code }) })
+    .then(response => { if (!response.ok) { throw new Error(`HTTP ${response.status}: ${response.statusText}`); } return response.json(); })
     .then(data => {
-      if (data.error) {
-        throw new Error(data.error);
-      }
+      if (data.error) { throw new Error(data.error); }
       trace = data;
       step = 0;
       setupVisualization();
-      renderStep();
     })
     .catch(error => {
       console.error('Error:', error);
-      document.getElementById('framesContainer').innerHTML = 
-        `<div class="error-message">
-          <strong>Error:</strong> ${error.message}
-          <br><br>
-          Please check your code and try again, or ensure the backend server is running.
-        </div>`;
+      document.getElementById('framesContainer').innerHTML = `<div class="error-message"><strong>Error:</strong> ${error.message}<br><br>Please check your code and try again.</div>`;
     });
   }
 
   function setupVisualization() {
-    const maxSteps = Math.max(0, trace.length - 1);
-    document.getElementById('stepSlider').max = maxSteps;
-    updateControls();
+    document.getElementById('stepSlider').max = Math.max(0, trace.length - 1);
+    renderStep();
   }
-
+  
   function updateControls() {
-    const prevBtn = document.getElementById('prevBtn');
-    const nextBtn = document.getElementById('nextBtn');
-    
-    prevBtn.disabled = step === 0;
-    nextBtn.disabled = step >= trace.length - 1;
-    
-    prevBtn.style.opacity = prevBtn.disabled ? '0.5' : '1';
-    nextBtn.style.opacity = nextBtn.disabled ? '0.5' : '1';
+    document.getElementById('prevBtn').disabled = step === 0;
+    document.getElementById('nextBtn').disabled = step >= trace.length - 1;
+    document.getElementById('stepSlider').value = step;
+    document.getElementById('stepLabel').innerText = `Step ${step + 1}/${trace.length}`;
   }
 
+  function updateSliderStyle() {
+    const slider = document.getElementById('stepSlider');
+    const max = slider.max > 0 ? slider.max : 1;
+    const percentage = (slider.value / max) * 100;
+    slider.style.background = `linear-gradient(to right, var(--highlight) ${percentage}%, var(--slider-track-bg) ${percentage}%)`;
+  }
+  
   function renderStep() {
     if (!trace.length) return;
-
     const currentStep = trace[step];
-    
-    // Update step label
-    document.getElementById('stepLabel').innerText = `Step ${step + 1}/${trace.length}`;
-    document.getElementById('stepSlider').value = step;
-
-    // Render code with highlighting
-    renderCodeWithHighlight(currentStep.line);
-    
-    // Render stack frames and variables
-    renderStackFrames(currentStep);
-    
-    // Show step information if available
-    renderStepInfo(currentStep);
-    
-    // Update control states
     updateControls();
+    updateSliderStyle();
+    renderCodeWithHighlight(currentStep.line);
+    renderStackFrames(currentStep);
+    renderStepInfo(currentStep);
   }
 
   function renderCodeWithHighlight(currentLine) {
-    const codeLines = code.split('\n');
     const codeDisplay = document.getElementById('codeDisplay');
     codeDisplay.innerHTML = '';
-
-    codeLines.forEach((line, index) => {
+    code.split('\n').forEach((line, index) => {
       const lineDiv = document.createElement('div');
       lineDiv.className = 'code-line';
-      lineDiv.textContent = line || ' '; // Handle empty lines
-      
-      // Highlight current line (backend provides 1-based line numbers)
+      lineDiv.textContent = line || ' ';
       if (currentLine && index + 1 === currentLine) {
         lineDiv.classList.add('highlight-line');
+        lineDiv.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
       }
-      
       codeDisplay.appendChild(lineDiv);
     });
   }
 
+  /**
+   * MODIFIED: Automatically scrolls the stack frame container to the bottom.
+   */
   function renderStackFrames(stepData) {
     const container = document.getElementById('framesContainer');
     container.innerHTML = '';
-
-    // Collect all frames
     const allFrames = [];
-    
-    // Add global frame if global variables exist
-    if (stepData.variables && stepData.variables.global) {
-      allFrames.push({ 
-        function: 'global', 
-        locals: stepData.variables.global 
-      });
-    }
+    if (stepData.variables && stepData.variables.global) { allFrames.push({ function: 'Global Frame', locals: stepData.variables.global }); }
+    if (stepData.stack && stepData.stack.length > 0) { allFrames.push(...stepData.stack); }
 
-    // Add stack frames if they exist
-    if (stepData.stack && stepData.stack.length > 0) {
-      allFrames.push(...stepData.stack);
-    }
-
-    // Render frames or show message if no frames
     if (allFrames.length === 0) {
-      container.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 2rem;">No active stack frames</div>';
+      container.innerHTML = '<div class="loading" style="padding:2rem;">No active stack frames</div>';
       return;
     }
+    
+    allFrames.forEach(frame => container.appendChild(createStackFrame(frame.function, frame.locals || {})));
 
-    allFrames.forEach(frame => {
-      container.appendChild(createStackFrame(frame.function, frame.locals || {}));
-    });
+    // --- NEW LINE ADDED ---
+    // Scroll the container to the bottom to show the most recent frame.
+    container.scrollTop = container.scrollHeight;
   }
 
   function createStackFrame(functionName, variables) {
     const frame = document.createElement('div');
     frame.className = 'stack-frame';
-    
     const header = document.createElement('h3');
     header.textContent = functionName;
     frame.appendChild(header);
-
-    // Add variables
     const varKeys = Object.keys(variables);
     if (varKeys.length === 0) {
       const noVars = document.createElement('div');
       noVars.style.color = 'var(--text-secondary)';
       noVars.style.fontStyle = 'italic';
-      noVars.textContent = 'No variables';
+      noVars.textContent = 'No local variables';
       frame.appendChild(noVars);
     } else {
       varKeys.forEach(key => {
         const varRow = document.createElement('div');
         varRow.className = 'variable';
-        
         const nameSpan = document.createElement('span');
         nameSpan.className = 'variable-name';
         nameSpan.textContent = key;
-        
         const valueSpan = document.createElement('span');
         valueSpan.className = 'variable-value';
         valueSpan.textContent = formatValue(variables[key]);
-        
         varRow.appendChild(nameSpan);
         varRow.appendChild(valueSpan);
         frame.appendChild(varRow);
       });
     }
-
     return frame;
   }
 
   function formatValue(value) {
-    if (typeof value === 'string') {
-      return `"${value}"`;
-    } else if (typeof value === 'object' && value !== null) {
-      try {
-        return JSON.stringify(value);
-      } catch (e) {
-        return String(value);
-      }
-    }
+    if (typeof value === 'string') return `"${value}"`;
+    if (typeof value === 'object' && value !== null) { try { return JSON.stringify(value); } catch (e) { return String(value); } }
     return String(value);
   }
 
   function renderStepInfo(stepData) {
     const outputSection = document.getElementById('outputSection');
-    const output = document.getElementById('output');
-    
-    let hasInfo = false;
-    let infoText = '';
-
-    // Show notes or code information
-    if (stepData.note) {
-      infoText += stepData.note;
-      hasInfo = true;
-    } else if (stepData.code) {
-      infoText += `Executing: ${stepData.code}`;
-      hasInfo = true;
-    }
-
-    if (hasInfo) {
-      output.textContent = infoText;
-      outputSection.style.display = 'block';
-    } else {
-      outputSection.style.display = 'none';
-    }
+    let hasInfo = false, infoText = '';
+    if (stepData.note) { infoText += stepData.note; hasInfo = true; }
+    else if (stepData.code) { infoText += `Executing: ${stepData.code}`; hasInfo = true; }
+    if (hasInfo) { document.getElementById('output').textContent = infoText; outputSection.style.display = 'block'; }
+    else { outputSection.style.display = 'none'; }
   }
 
-  function nextStep() {
-    if (step < trace.length - 1) {
-      step++;
-      renderStep();
-    }
-  }
-
-  function prevStep() {
-    if (step > 0) {
-      step--;
-      renderStep();
-    }
-  }
+  function nextStep() { if (step < trace.length - 1) { step++; renderStep(); } }
+  function prevStep() { if (step > 0) { step--; renderStep(); } }
 
   function editCode() {
     document.getElementById('visualizer').style.display = 'none';
     document.getElementById('codeInput').style.display = 'block';
-    // Reset state
-    trace = [];
-    step = 0;
+    trace = []; step = 0;
   }
 
-  // Handle slider input
   document.getElementById('stepSlider').addEventListener('input', (e) => {
-    step = parseInt(e.target.value);
+    step = parseInt(e.target.value, 10);
     renderStep();
   });
+  
+  document.getElementById('stepSlider').addEventListener('input', updateSliderStyle);
 
-  // Keyboard shortcuts
   document.addEventListener('keydown', (e) => {
     if (document.getElementById('visualizer').style.display !== 'none') {
-      if (e.key === 'ArrowRight' || e.key === ' ') {
-        e.preventDefault();
-        nextStep();
-      } else if (e.key === 'ArrowLeft') {
-        e.preventDefault();
-        prevStep();
-      } else if (e.key === 'Escape') {
-        editCode();
-      }
+      if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); nextStep(); }
+      else if (e.key === 'ArrowLeft') { e.preventDefault(); prevStep(); }
+      else if (e.key === 'Escape') { editCode(); }
     }
   });
 </script>

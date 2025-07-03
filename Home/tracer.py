@@ -64,13 +64,17 @@ class EnhancedUniversalTracer:
         self.step_counter = 0
         self.call_stack: List[TracerStackFrame] = []
         self.is_tracing = True
-        self.current_print_output = None
+        self.last_global_print_output = None
         self.loop_iterations = {}
         self.defined_functions = set()
         self.call_sequence_stack = []
 
     def add_event(self, line_no, event_type, code, note=None, output=None, call_sequence=None):
         if not self.is_tracing: return
+        # A print event updates the last known output, keeping its type
+        if event_type == EventType.PRINT:
+             self.last_global_print_output = output
+
         self.is_tracing = False
         self.step_counter += 1
         variables, stack_snapshot = self._capture_state_snapshot()
@@ -79,13 +83,37 @@ class EnhancedUniversalTracer:
         self.is_tracing = True
 
     def _capture_state_snapshot(self):
-        if not self.call_stack: return {"global": {}, "local": {}}, []
+        if not self.call_stack: return {}, []
+        
         module_frame = self.call_stack[0]
-        global_vars = {k: self._serialize_value(v) for k, v in module_frame.locals.items() if not k.startswith('__') and k not in ['print', 'input', 'builtins'] and not callable(v)}
+        global_vars = {
+            k: self._serialize_value(v)
+            for k, v in module_frame.locals.items()
+            if not k.startswith('__') and k not in ['print', 'input', 'builtins'] and not callable(v)
+        }
+
+        # Add the persistent print output directly to the global_vars dictionary
+        if self.last_global_print_output is not None:
+            # We serialize it here to ensure it's JSON-safe
+            global_vars["print_output"] = self._serialize_value(self.last_global_print_output)
+
         current_frame = self.call_stack[-1]
-        local_vars = {k: self._serialize_value(v) for k, v in current_frame.locals.items() if not k.startswith('__') and not callable(v) and k not in global_vars}
-        variables_snapshot = {"global": global_vars, "local": local_vars}
-        stack_snapshot = [{"function": frame.name, "type": frame.frame_type, "line": frame.call_line, "locals": {k: self._serialize_value(v) for k, v in frame.locals.items() if not k.startswith('__') and not callable(v) and k not in frame.globals}} for frame in self.call_stack[1:]]
+        local_vars = {}
+        if current_frame.name != "<module>":
+             local_vars = {
+                k: self._serialize_value(v)
+                for k, v in current_frame.locals.items()
+                if not k.startswith('__') and not callable(v) and k not in global_vars
+             }
+
+        variables_snapshot = { "global": global_vars, "local": local_vars }
+        stack_snapshot = [
+            {
+                "function": frame.name, "type": frame.frame_type, "line": frame.call_line,
+                "locals": { k: self._serialize_value(v) for k, v in frame.locals.items() if not k.startswith('__') and not callable(v) and k not in frame.globals }
+            } for frame in self.call_stack[1:]
+        ]
+        
         return variables_snapshot, stack_snapshot
 
     def _serialize_value(self, value):
@@ -145,21 +173,9 @@ class EnhancedUniversalTracer:
         self.reset()
         self.source_lines = code.strip().split('\n')
         self.add_event(0, EventType.START, "", note="Execution begins")
-        def traced_print(*args, **kwargs):
-            self.current_print_output = ' '.join(str(arg) for arg in args)
-            return builtins.print(*args, **kwargs)
-        def mock_input(prompt=""):
-            return str(random.randint(1, 8))
-
-        # *** THE FIX IS HERE ***
-        # We manually set __name__ to '__main__' in the execution namespace
-        # so that the `if __name__ == "__main__":` block will execute.
-        exec_namespace = {
-            'print': traced_print,
-            'input': mock_input,
-            '__builtins__': builtins,
-            '__name__': '__main__'
-        }
+        def traced_print(*args, **kwargs): pass
+        def mock_input(prompt=""): return str(random.randint(1, 8))
+        exec_namespace = { 'print': traced_print, 'input': mock_input, '__builtins__': builtins, '__name__': '__main__' }
 
         try:
             sys.settrace(self._trace_function)
@@ -201,20 +217,7 @@ class EnhancedUniversalTracer:
             event_type, note, output = EventType.EXPRESSION, "Executing statement", None
             try:
                 node = ast.parse(code_line.strip()).body[0]
-                call_node = None
-                if isinstance(node, ast.Assign): call_node = node.value
-                elif isinstance(node, ast.Expr): call_node = node.value
-                if isinstance(call_node, ast.Call):
-                    func_name = self._extract_function_name(call_node)
-                    if func_name == 'input':
-                        event_type = EventType.INPUT
-                        prompt = self._get_value_from_node(call_node.args[0], frame) if call_node.args else ""
-                        note = f"Reading input from user with prompt: '{prompt}'. Simulated with a random number."
-                    elif func_name == 'print':
-                        event_type, output = EventType.PRINT, self.current_print_output
-                        note = f"Printing: {output}"
-                        self.current_print_output = None
-                elif isinstance(node, (ast.If)): event_type, note = self._analyze_comparison(node.test, frame)
+                if isinstance(node, (ast.If)): event_type, note = self._analyze_comparison(node.test, frame)
                 elif isinstance(node, (ast.For, ast.While)):
                     self.loop_iterations[line_no] = self.loop_iterations.get(line_no, 0) + 1
                     event_type, note = EventType.LOOP, f"Loop iteration {self.loop_iterations[line_no]}"
@@ -223,12 +226,28 @@ class EnhancedUniversalTracer:
                     event_type, note = self._analyze_math_operation(node.value, frame) if isinstance(node.value, ast.BinOp) else (EventType.ASSIGN, f"Assigning to '{target_str}'")
                 elif isinstance(node, ast.AugAssign):
                     target_str = node.target.id if isinstance(node.target, ast.Name) else 'variable'
-                    event_type, note = EventType.ASSIGN, f"Updating '{target_str}'"
-                elif isinstance(node, ast.Return): event_type, note = self._analyze_math_operation(node.value, frame) if isinstance(node.value, ast.BinOp) else (EventType.RETURN, "Returning from function")
-                elif isinstance(node, ast.Expr):
-                    value_node = node.value
-                    if isinstance(value_node, ast.BinOp): event_type, note = self._analyze_math_operation(value_node, frame)
-                    elif isinstance(value_node, ast.Compare): event_type, note = self._analyze_comparison(value_node, frame)
+                    event_type, note = self._analyze_math_operation(node, frame) if isinstance(node.value, ast.BinOp) else (EventType.ASSIGN, f"Updating '{target_str}'")
+                elif isinstance(node, ast.Return):
+                    event_type, note = self._analyze_math_operation(node.value, frame) if isinstance(node.value, ast.BinOp) else (EventType.RETURN, "Preparing to return")
+                elif isinstance(node, ast.Expr) and isinstance(node.value, ast.Call):
+                    call_node = node.value
+                    func_name = self._extract_function_name(call_node)
+                    if func_name == 'print':
+                        event_type = EventType.PRINT
+                        try:
+                            # *** THIS IS THE NEW TYPE-PRESERVING LOGIC ***
+                            arg_values = [self._get_value_from_node(arg, frame) for arg in call_node.args]
+                            if len(arg_values) == 1:
+                                output = arg_values[0] # Keep original type for single argument
+                            else:
+                                output = ' '.join(map(str, arg_values)) # Join multiple args as a string
+                            note = f"Printing: {str(output)}" # The note is always a string
+                        except Exception:
+                            output, note = "...", "Printing value(s)"
+                    elif func_name == 'input':
+                        event_type = EventType.INPUT
+                        prompt = self._get_value_from_node(call_node.args[0], frame) if call_node.args else ""
+                        note = f"Reading input with prompt: '{prompt}'. Simulated."
             except (SyntaxError, IndexError): pass
             self.add_event(line_no, event_type, code_line, note=note, output=output, call_sequence=self._get_call_sequence())
         return self._trace_function
@@ -238,7 +257,7 @@ class EnhancedUniversalTracer:
         for event in self.trace_events:
             event_dict = asdict(event)
             event_dict['event'] = event.event.value
-            final_events.append({k: v for k, v in event_dict.items() if v is not None and v != [] and v!={}})
+            final_events.append({k: v for k, v in event_dict.items() if v is not None and v != []})
         return json.dumps(final_events, indent=2)
 
 def trace_python_code(code_string: str, output_format="json") -> str:
@@ -247,19 +266,15 @@ def trace_python_code(code_string: str, output_format="json") -> str:
     tracer = EnhancedUniversalTracer()
     return tracer.trace_execution(code_string)
 
-# Test with your provided example
+# Example to show the new type-preserving print output
 if __name__ == "__main__":
-    test_code_main = """
-def main():
-    print("Hello! Your project environment is working perfectly.")
-    x = 10
-    y = 20
-    print(f"Sum of {x} and {y} is {x + y}")
- 
-if __name__ == "__main__":
-    main()
+    test_code = """
+x = 100
+print(x)
+print("---")
+print("value is:", x)
 """
     
-    print("\n=== TESTING if __name__ == '__main__' BLOCK ===")
-    trace_output = trace_python_code(test_code_main)
+    print("\n=== DEMONSTRATING TYPE-PRESERVING PRINT OUTPUT ===")
+    trace_output = trace_python_code(test_code)
     print(trace_output)
