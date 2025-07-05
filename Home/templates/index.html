@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Python Execution Visualizer</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><defs><linearGradient id='pyBlue' x1='0%' y1='0%' x2='100%' y2='100%'><stop offset='0%' style='stop-color:%23306998;stop-opacity:1' /><stop offset='100%' style='stop-color:%23FFD43B;stop-opacity:1' /></linearGradient></defs><path d='M50,10 C35,10 25,20 25,35 L25,45 L45,45 L45,50 L20,50 C15,50 10,55 10,60 L10,75 C10,80 15,85 20,85 L35,85 L35,70 C35,65 40,60 45,60 L55,60 C60,60 65,55 65,50 L65,35 C65,20 55,10 50,10 Z M40,25 C42,25 44,27 44,30 C44,33 42,35 40,35 C38,35 36,33 36,30 C36,27 38,25 40,25 Z' fill='url(%23pyBlue)'/><path d='M50,90 C65,90 75,80 75,65 L75,55 L55,55 L55,50 L80,50 C85,50 90,45 90,40 L90,25 C90,20 85,15 80,15 L65,15 L65,30 C65,35 60,40 55,40 L45,40 C40,40 35,45 35,50 L35,65 C35,80 45,90 50,90 Z M60,75 C58,75 56,73 56,70 C56,67 58,65 60,65 C62,65 64,67 64,70 C64,73 62,75 60,75 Z' fill='url(%23pyBlue)'/></svg>" type="image/svg+xml">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
   <style>
@@ -44,13 +45,13 @@
     .panel { background: var(--panel); border: 1px solid var(--panel-border); border-radius: 16px; padding: 1rem; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3); backdrop-filter: blur(10px); position: relative; overflow: hidden; display: flex; flex-direction: column; }
     .left-column > .panel { flex: 1; min-height: 0; }
     .right-column > .panel { flex: 1; }
+    .right-column .controls { margin-top: 0; }
     .panel::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: linear-gradient(90deg, transparent, var(--highlight), transparent); }
     .panel h2 { margin: 0 0 1rem; color: var(--highlight); font-size: clamp(1rem, 2vw, 1.25rem); font-weight: 600; display: flex; align-items: center; gap: 0.5rem; flex-shrink: 0; }
 
-    /* --- Right Column (Stack Frames) Scrolling --- */
-    #framesContainer { flex: 1; overflow-y: auto; padding-right: 0.5rem; }
-    .stack-frame { background: var(--frame-bg); border: 1px solid var(--frame-border); border-radius: 12px; padding: 1rem; margin-bottom: 1rem; transition: all 0.3s ease; backdrop-filter: blur(5px); }
-    .stack-frame:last-child { margin-bottom: 0; }
+    /* --- Right Column (Stack Frames + Step Info) Scrolling --- */
+    #rightContent { flex: 1; overflow-y: auto; padding-right: 0.5rem; display: flex; flex-direction: column; gap: 1rem; }
+    .stack-frame { background: var(--frame-bg); border: 1px solid var(--frame-border); border-radius: 12px; padding: 1rem; transition: all 0.3s ease; backdrop-filter: blur(5px); }
     .stack-frame:hover { border-color: var(--highlight); box-shadow: 0 4px 20px rgba(58, 140, 255, 0.15); }
     .stack-frame h3 { margin: 0 0 0.75rem; color: var(--highlight); font-size: clamp(0.9rem, 2vw, 1.1rem); font-weight: 600; word-break: break-word; }
     .stack-frame h3::before { content: '📦'; margin-right: 0.5rem; }
@@ -65,8 +66,11 @@
     @keyframes pulse {
       50% { background: linear-gradient(90deg, rgba(58, 140, 255, 0.25), rgba(58, 140, 255, 0.1)); }
     }
-    .output-section { background: rgba(0, 255, 255, 0.05); border: 1px solid rgba(0, 255, 255, 0.2); padding: 1rem; border-radius: 8px; margin-top: 1rem; flex-shrink: 0; }
-    .output-section h4 { margin: 0 0 0.5rem; color: var(--accent); }
+    
+    /* --- Step Info Panel (now on right side) --- */
+    .step-info-panel { background: rgba(0, 255, 255, 0.05); border: 1px solid rgba(0, 255, 255, 0.2); padding: 1rem; border-radius: 12px; flex-shrink: 0; }
+    .step-info-panel h4 { margin: 0 0 0.5rem; color: var(--accent); font-size: clamp(0.9rem, 2vw, 1.1rem); font-weight: 600; }
+    .step-info-content { font-family: 'JetBrains Mono', monospace; font-size: clamp(0.8rem, 1.5vw, 0.9rem); color: var(--text-secondary); }
 
     /* --- Controls & Attractive Slider --- */
     .controls { display: flex; align-items: center; flex-wrap: wrap; gap: 1rem; flex-shrink: 0; background: var(--panel); border: 1px solid var(--panel-border); padding: 1rem; border-radius: 16px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2); backdrop-filter: blur(10px); }
@@ -80,7 +84,7 @@
     #stepSlider::-moz-range-thumb { width: 22px; height: 22px; background: #fff; border: 3px solid var(--highlight); border-radius: 50%; cursor: pointer; box-shadow: 0 0 10px rgba(58, 140, 255, 0.5); transition: all 0.2s ease-in-out; }
     #stepSlider::-moz-range-thumb:hover { transform: scale(1.1); box-shadow: 0 0 20px rgba(58, 140, 255, 0.8); }
 
-    .loading, .error-message { padding: 1rem; margin-top: 1rem; border-radius: 8px; }
+    .loading, .error-message { padding: 1rem; border-radius: 8px; }
     .loading { display: flex; align-items: center; justify-content: center; }
     .loading::after { content: ''; width: 20px; height: 20px; border: 2px solid var(--highlight); border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite; margin-left: 0.5rem; }
     @keyframes spin { to { transform: rotate(360deg); } }
@@ -91,7 +95,7 @@
       html, body { height: auto; overflow-y: auto; }
       .container { padding: 0.5rem; flex: 1 1 auto; overflow: visible; height: auto; }
       #visualizer, .main-layout { flex-direction: column; height: auto; overflow: visible; }
-      .panel, #framesContainer, pre#codeDisplay { overflow: visible; flex: none; padding-right: 0; }
+      .panel, #rightContent, pre#codeDisplay { overflow: visible; flex: none; padding-right: 0; }
       .controls { flex-direction: column; align-items: stretch; gap: 0.75rem; }
       .step-info { margin-left: 0; justify-content: center; flex-direction: column; }
       .slider-container { order: -1; }
@@ -125,27 +129,31 @@ print('Done.')"></textarea>
   </div>
   <div id="visualizer" style="display:none">
     <div class="main-layout">
-      <!-- Left Column: Code and Controls -->
+      <!-- Left Column: Code Only -->
       <div class="left-column">
         <div class="panel">
           <h2>💻 Code Execution</h2>
           <pre id="codeDisplay"></pre>
-          <div id="outputSection" class="output-section" style="display:none">
-            <h4>📋 Step Information</h4>
-            <div id="output"></div>
+        </div>
+      </div>
+      <!-- Right Column: Step Info + Stack Frames + Controls -->
+      <div class="right-column">
+        <div class="panel">
+          <h2>🔍 Execution Details</h2>
+          <div id="rightContent">
+            <!-- Step Information Panel -->
+            <div id="stepInfoPanel" class="step-info-panel" style="display:none">
+              <h4>📋 Step Information</h4>
+              <div id="stepInfoContent" class="step-info-content"></div>
+            </div>
+            <!-- Stack Frames Container -->
+            <div id="framesContainer"><div class="loading">Loading execution trace...</div></div>
           </div>
         </div>
         <div class="controls">
           <div class="controls-nav"><button onclick="prevStep()" id="prevBtn">⏮️ Previous</button><button onclick="nextStep()" id="nextBtn">Next ⏭️</button></div>
           <div class="slider-container"><input type="range" id="stepSlider" min="0" value="0"></div>
           <div class="step-info"><span id="stepLabel">Step 0/0</span><button onclick="editCode()" class="accent">✏️ Edit Code</button></div>
-        </div>
-      </div>
-      <!-- Right Column: Stack Frames (Scrollable) -->
-      <div class="right-column">
-        <div class="panel">
-          <h2>🔍 Stack Frames & Variables</h2>
-          <div id="framesContainer"><div class="loading">Loading execution trace...</div></div>
         </div>
       </div>
     </div>
@@ -221,15 +229,20 @@ print('Done.')"></textarea>
     });
   }
 
-  /**
-   * MODIFIED: Automatically scrolls the stack frame container to the bottom.
-   */
   function renderStackFrames(stepData) {
     const container = document.getElementById('framesContainer');
     container.innerHTML = '';
     const allFrames = [];
-    if (stepData.variables && stepData.variables.global) { allFrames.push({ function: 'Global Frame', locals: stepData.variables.global }); }
-    if (stepData.stack && stepData.stack.length > 0) { allFrames.push(...stepData.stack); }
+    
+    // Add global frame first (will be at top)
+    if (stepData.variables && stepData.variables.global) { 
+      allFrames.push({ function: 'Global Frame', locals: stepData.variables.global }); 
+    }
+    
+    // Add stack frames in order (most recent will be at bottom)
+    if (stepData.stack && stepData.stack.length > 0) { 
+      allFrames.push(...stepData.stack); 
+    }
 
     if (allFrames.length === 0) {
       container.innerHTML = '<div class="loading" style="padding:2rem;">No active stack frames</div>';
@@ -238,9 +251,11 @@ print('Done.')"></textarea>
     
     allFrames.forEach(frame => container.appendChild(createStackFrame(frame.function, frame.locals || {})));
 
-    // --- NEW LINE ADDED ---
-    // Scroll the container to the bottom to show the most recent frame.
-    container.scrollTop = container.scrollHeight;
+    // Scroll to bottom to show the most recent stack frame
+    const rightContent = document.getElementById('rightContent');
+    setTimeout(() => {
+      rightContent.scrollTop = rightContent.scrollHeight;
+    }, 100);
   }
 
   function createStackFrame(functionName, variables) {
@@ -281,12 +296,19 @@ print('Done.')"></textarea>
   }
 
   function renderStepInfo(stepData) {
-    const outputSection = document.getElementById('outputSection');
+    const stepInfoPanel = document.getElementById('stepInfoPanel');
+    const stepInfoContent = document.getElementById('stepInfoContent');
+    
     let hasInfo = false, infoText = '';
     if (stepData.note) { infoText += stepData.note; hasInfo = true; }
     else if (stepData.code) { infoText += `Executing: ${stepData.code}`; hasInfo = true; }
-    if (hasInfo) { document.getElementById('output').textContent = infoText; outputSection.style.display = 'block'; }
-    else { outputSection.style.display = 'none'; }
+    
+    if (hasInfo) { 
+      stepInfoContent.textContent = infoText; 
+      stepInfoPanel.style.display = 'block'; 
+    } else { 
+      stepInfoPanel.style.display = 'none'; 
+    }
   }
 
   function nextStep() { if (step < trace.length - 1) { step++; renderStep(); } }
